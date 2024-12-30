@@ -1,64 +1,61 @@
-import { StreakData, StreakInfo } from '../types/streak';
-import { formatDate } from './dateTime';
+import { TimeEntry } from '../types';
+import { StreakData } from '../types/streak';
 
-const STREAK_KEY = 'focus_streak';
+const STREAK_KEY = 'trackerThon_streak';
+const LAST_VISIT_KEY = 'trackerThon_lastVisit';
 
-export function getInitialStreakData(): StreakData {
-  return {
-    currentStreak: 0,
-    lastAccessDate: '',
-    longestStreak: 0
-  };
-}
+const isToday = (date: Date) => {
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
+};
 
-export function loadStreakData(): StreakData {
-  const stored = localStorage.getItem(STREAK_KEY);
-  if (!stored) {
-    return getInitialStreakData();
-  }
-  return JSON.parse(stored);
-}
-
-export function saveStreakData(data: StreakData) {
-  localStorage.setItem(STREAK_KEY, JSON.stringify(data));
-}
-
-export function updateStreak(): StreakInfo {
-  const today = formatDate(new Date());
-  const data = loadStreakData();
-  
-  // First time opening the app
-  if (!data.lastAccessDate) {
-    const newData = {
-      currentStreak: 1,
-      lastAccessDate: today,
-      longestStreak: 1
-    };
-    saveStreakData(newData);
-    return { ...newData, isToday: true };
-  }
-
-  // Already opened today
-  if (data.lastAccessDate === today) {
-    return { ...data, isToday: true };
-  }
-
-  // Check if last access was yesterday
-  const lastAccess = new Date(data.lastAccessDate);
+const isYesterday = (date: Date) => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
+  return date.toDateString() === yesterday.toDateString();
+};
 
-  const isConsecutiveDay = formatDate(lastAccess) === formatDate(yesterday);
+export const updateStreak = (entries: TimeEntry[]): StreakData => {
+  const stored = localStorage.getItem(STREAK_KEY);
+  let streak: StreakData = stored
+    ? JSON.parse(stored)
+    : {
+        currentStreak: 0,
+        longestStreak: 0,
+        lastActiveDate: null,
+        streakHistory: [],
+      };
 
-  const newData = {
-    currentStreak: isConsecutiveDay ? data.currentStreak + 1 : 1,
-    lastAccessDate: today,
-    longestStreak: Math.max(
-      data.longestStreak,
-      isConsecutiveDay ? data.currentStreak + 1 : 1
-    )
-  };
+  const today = new Date().toISOString().split('T')[0];
+  const lastVisit = localStorage.getItem(LAST_VISIT_KEY);
+  
+  // Update streak based on app visits
+  if (!lastVisit) {
+    streak.currentStreak = 1;
+    streak.longestStreak = Math.max(1, streak.longestStreak);
+    streak.streakHistory = [{ date: today, completed: true }];
+  } else {
+    const lastVisitDate = new Date(lastVisit);
+    
+    if (!isToday(lastVisitDate)) {
+      if (isYesterday(lastVisitDate)) {
+        streak.currentStreak += 1;
+        streak.longestStreak = Math.max(streak.currentStreak, streak.longestStreak);
+      } else {
+        streak.currentStreak = 1;
+      }
+      streak.streakHistory.push({ date: today, completed: true });
+    }
+  }
 
-  saveStreakData(newData);
-  return { ...newData, isToday: true };
-}
+  // Keep only last 30 days in history
+  if (streak.streakHistory.length > 30) {
+    streak.streakHistory = streak.streakHistory.slice(-30);
+  }
+
+  streak.lastActiveDate = today;
+  localStorage.setItem(STREAK_KEY, JSON.stringify(streak));
+  localStorage.setItem(LAST_VISIT_KEY, new Date().toISOString());
+
+  return streak;
+};

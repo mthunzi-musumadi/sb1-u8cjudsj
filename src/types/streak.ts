@@ -1,9 +1,6 @@
 export interface StreakData {
   currentStreak: number;
-  lastAccessDate: string;
   longestStreak: number;
-}
-
-export interface StreakInfo extends StreakData {
-  isToday: boolean;
+  lastActiveDate: string | null;
+  streakHistory: { date: string; completed: boolean }[];
 }
